@@ -1,0 +1,1781 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0e1a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HabitFlow">
+<meta name="description" content="تتبع عاداتك اليومية وحقق أهدافك">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512x512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
+<title>HabitFlow - متتبع العادات</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+
+<style>
+/* ============================================================
+   HabitFlow v6 - CSS Variables & Base
+   TODO: يمكن في المستقبل نقل CSS إلى ملف منفصل style.css
+   ============================================================ */
+:root{
+  --bg:#0a0e1a;--surface:#111827;--card:#1a2235;--border:#1e2d45;
+  --primary:#00e5a0;--primary2:#00b8d9;--accent:#f59e0b;
+  --danger:#ef4444;--text:#e2e8f0;--muted:#64748b;
+  --glow:0 0 20px rgba(0,229,160,0.15);--r:18px;--t:.2s ease;
+  /* TODO: إضافة متغيرات للثيم الثالث (high contrast) مستقبلاً */
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* ============================================================
+   خلفية ديكورية
+   ============================================================ */
+.bg-grid{position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,160,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,160,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.bg-glow{position:fixed;width:700px;height:700px;background:radial-gradient(circle,rgba(0,229,160,0.07) 0%,transparent 70%);top:-250px;right:-250px;pointer-events:none;z-index:0;animation:fg 8s ease-in-out infinite}
+.bg-glow2{position:fixed;width:500px;height:500px;background:radial-gradient(circle,rgba(0,184,217,0.05) 0%,transparent 70%);bottom:-150px;left:-150px;pointer-events:none;z-index:0;animation:fg 10s ease-in-out infinite reverse}
+@keyframes fg{0%,100%{transform:translate(0,0)}50%{transform:translate(20px,20px)}}
+
+/* ============================================================
+   ✨ وضع عدم الإزعاج (Focus Mode)
+   يخفي كل شيء ويعرض التايمر فقط في منتصف الشاشة
+   TODO: إضافة موسيقى تركيز (white noise) في المستقبل
+   ============================================================ */
+body.focus-mode .bg-grid,
+body.focus-mode .bg-glow,
+body.focus-mode .bg-glow2{display:none}
+body.focus-mode .header,
+body.focus-mode .stats-row,
+body.focus-mode .xp-bar-wrap,
+body.focus-mode .charts-row,
+body.focus-mode .habits-section,
+body.focus-mode .footer,
+body.focus-mode .bottom-nav,
+body.focus-mode .fab,
+body.focus-mode .notif-container{display:none!important}
+body.focus-mode .app{padding:0;max-width:100%;display:flex;align-items:center;justify-content:center;min-height:100vh}
+body.focus-mode .focus-overlay{display:flex!important}
+
+/* طبقة وضع التركيز - تظهر فقط عند التفعيل */
+.focus-overlay{
+  display:none;
+  position:fixed;inset:0;z-index:9990;
+  background:var(--bg);
+  flex-direction:column;align-items:center;justify-content:center;gap:20px;
+  animation:fadeUp .4s ease
+}
+.focus-exit-btn{
+  position:fixed;top:20px;left:20px;z-index:9995;
+  background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);
+  color:var(--danger);padding:10px 16px;border-radius:12px;
+  cursor:pointer;font-family:'Cairo',sans-serif;font-weight:700;font-size:0.9em;
+  transition:all var(--t);display:none
+}
+body.focus-mode .focus-exit-btn{display:flex;align-items:center;gap:6px}
+.focus-exit-btn:hover{background:rgba(239,68,68,0.25)}
+.focus-label{font-size:1.1em;font-weight:700;color:var(--primary);letter-spacing:2px;text-transform:uppercase}
+.focus-task-label{font-size:0.85em;color:var(--muted)}
+
+/* ============================================================
+   تخطيط التطبيق الرئيسي
+   ============================================================ */
+.app{position:relative;z-index:1;max-width:1320px;margin:0 auto;padding:16px}
+
+/* ============================================================
+   الهيدر
+   ============================================================ */
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:20px;backdrop-filter:blur(10px);gap:12px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.logo-icon{width:44px;height:44px;background:linear-gradient(135deg,var(--primary),var(--primary2));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:var(--glow);flex-shrink:0}
+.logo-text{font-size:1.5em;font-weight:900;background:linear-gradient(135deg,var(--primary),var(--primary2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo-sub{font-size:0.72em;color:var(--muted)}
+.header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.date-display{font-size:0.82em;background:var(--card);padding:7px 12px;border-radius:10px;border:1px solid var(--border);text-align:center;line-height:1.7}
+.date-hijri{color:var(--primary);font-size:0.87em;font-weight:700;display:block}
+.date-gregorian{color:var(--muted);font-size:0.73em;display:block}
+
+/* ============================================================
+   إحصاءات رئيسية
+   ============================================================ */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;position:relative;overflow:hidden;transition:transform var(--t),border-color var(--t),box-shadow var(--t);animation:fadeUp .4s ease both}
+.stat-card:hover{transform:translateY(-4px);border-color:var(--primary);box-shadow:var(--glow)}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--primary),var(--primary2))}
+.stat-card:nth-child(1){animation-delay:.05s}.stat-card:nth-child(2){animation-delay:.1s}.stat-card:nth-child(3){animation-delay:.15s}.stat-card:nth-child(4){animation-delay:.2s}
+.stat-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px}
+.stat-val{font-size:2em;font-weight:900;font-family:'JetBrains Mono',monospace;line-height:1}
+.stat-label{font-size:0.8em;color:var(--muted);margin-top:4px}
+
+/* ============================================================
+   شريط XP والملف الشخصي
+   ============================================================ */
+.xp-bar-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.xp-avatar{width:54px;height:54px;border-radius:50%;border:2px solid var(--primary);overflow:hidden;cursor:pointer;flex-shrink:0;transition:transform var(--t);box-shadow:0 0 0 4px rgba(0,229,160,0.1)}
+.xp-avatar:hover{transform:scale(1.06)}
+.xp-avatar img{width:100%;height:100%;object-fit:cover}
+.xp-info{flex:1;min-width:160px}
+.xp-name{font-weight:700;font-size:1.05em}
+.xp-level{font-size:0.78em;color:var(--primary);margin-bottom:6px;font-weight:700}
+.xp-bar-bg{height:8px;background:var(--border);border-radius:10px;overflow:hidden}
+.xp-bar-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--primary2));border-radius:10px;transition:width 1.2s cubic-bezier(.4,0,.2,1)}
+.xp-numbers{font-size:0.73em;color:var(--muted);margin-top:4px;font-family:'JetBrains Mono',monospace}
+.badge-row{display:flex;gap:5px;flex-wrap:wrap}
+.badge{padding:3px 9px;border-radius:20px;font-size:0.7em;font-weight:700;border:1px solid;transition:transform var(--t)}
+.badge:hover{transform:scale(1.1)}
+
+/* ============================================================
+   الرسوم البيانية
+   ============================================================ */
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px}
+.chart-title{font-size:0.85em;font-weight:700;color:var(--muted);margin-bottom:14px;text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:6px}
+.chart-wrap{position:relative;height:190px}
+
+/* ============================================================
+   تبويبات (Tabs)
+   ============================================================ */
+.tabs{display:flex;gap:5px;margin-bottom:18px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:9px 16px;border-radius:10px;font-family:'Cairo',sans-serif;font-weight:600;font-size:0.86em;cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--muted);transition:all var(--t);white-space:nowrap;flex-shrink:0}
+.tab.active{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#0a0e1a;border-color:transparent;box-shadow:var(--glow)}
+.tab:hover:not(.active){border-color:var(--primary);color:var(--primary)}
+.tab-content{display:none}
+.tab-content.active{display:block;animation:fadeUp .3s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* ============================================================
+   قسم العادات
+   ============================================================ */
+.habits-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:22px;margin-bottom:20px}
+.add-row{display:flex;gap:9px;margin-bottom:16px;flex-wrap:wrap}
+.add-input{flex:1;min-width:140px;padding:11px 15px;background:var(--card);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Cairo',sans-serif;font-size:0.92em;outline:none;transition:border-color var(--t),box-shadow var(--t)}
+.add-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(0,229,160,0.1)}
+.cat-select{padding:11px 12px;background:var(--card);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Cairo',sans-serif;outline:none;cursor:pointer}
+
+/* ============================================================
+   جدول العادات
+   ============================================================ */
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:700px}
+thead th{background:var(--card);padding:9px 5px;color:var(--muted);font-weight:600;font-size:0.78em;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--t)}
+tbody tr:hover{background:rgba(0,229,160,0.03)}
+tbody tr:last-child{border-bottom:none}
+td{padding:7px 5px;text-align:center;vertical-align:middle}
+.habit-cell{text-align:right;padding:9px 13px;min-width:170px}
+.habit-name{font-weight:700;font-size:0.88em}
+.habit-cat{font-size:0.7em;padding:2px 7px;border-radius:10px;display:inline-block;margin-top:2px}
+.streak-fire{color:#f59e0b;font-size:0.78em;font-weight:700}
+.habit-note{font-size:0.7em;color:var(--muted);margin-top:2px;font-style:italic;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ============================================================
+   بطاقات الموبايل
+   ============================================================ */
+.habit-cards{display:none;flex-direction:column;gap:10px}
+.habit-card-mobile{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;transition:border-color var(--t)}
+/* عادات مؤرشفة تظهر بشكل مختلف */
+.habit-card-mobile.archived-card{opacity:0.55;border-style:dashed}
+.hcm-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px}
+.hcm-name{font-weight:700;font-size:0.95em;margin-bottom:3px}
+.hcm-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hcm-days{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.hcm-day{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:30px}
+.hcm-day-label{font-size:0.62em;color:var(--muted)}
+.hcm-check{width:26px;height:26px;cursor:pointer;accent-color:var(--primary)}
+.hcm-today{background:rgba(0,229,160,0.08);border-radius:8px;padding:3px}
+.hcm-prog{height:4px;background:var(--border);border-radius:10px;overflow:hidden}
+.hcm-prog-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--primary2));border-radius:10px;transition:width .6s ease}
+.day-check{width:20px;height:20px;cursor:pointer;accent-color:var(--primary)}
+.day-today{background:rgba(0,229,160,0.06)}
+
+/* ============================================================
+   أزرار
+   ============================================================ */
+.btn{cursor:pointer;border:none;border-radius:12px;padding:10px 18px;font-weight:700;font-family:'Cairo',sans-serif;font-size:0.88em;transition:all var(--t);display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#0a0e1a}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px);box-shadow:var(--glow)}
+.btn-ghost{background:var(--card);color:var(--text);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--primary);color:var(--primary)}
+.btn-danger{background:rgba(239,68,68,0.12);color:var(--danger);border:1px solid rgba(239,68,68,0.25)}
+.btn-danger:hover{background:rgba(239,68,68,0.22)}
+.btn-archive{background:rgba(245,158,11,0.1);color:var(--accent);border:1px solid rgba(245,158,11,0.25)}
+.btn-archive:hover{background:rgba(245,158,11,0.2)}
+.btn-icon{width:34px;height:34px;padding:0;justify-content:center;font-size:14px;border-radius:10px}
+.btn-sm{padding:7px 13px;font-size:0.82em;border-radius:10px}
+
+/* ============================================================
+   ✨ التايمر / بومودورو
+   ============================================================ */
+.timer-ring{width:150px;height:150px;margin:0 auto 18px;position:relative}
+.timer-ring svg{transform:rotate(-90deg)}
+.timer-ring circle{fill:none;stroke-width:10;stroke-linecap:round}
+.ring-bg{stroke:var(--border)}
+.ring-fill{stroke:url(#tg);stroke-dasharray:376;stroke-dashoffset:376;transition:stroke-dashoffset 1s linear}
+.timer-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'JetBrains Mono',monospace;font-size:1.7em;font-weight:700}
+.timer-controls{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.session-dot{width:10px;height:10px;border-radius:50%;background:var(--border);transition:background .3s;display:inline-block}
+.session-dot.done{background:var(--primary)}
+
+/* ✨ اختيار مهمة التركيز للتايمر */
+.focus-task-select{width:100%;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Cairo',sans-serif;outline:none;margin-bottom:12px;cursor:pointer}
+
+/* ============================================================
+   المكافآت
+   ============================================================ */
+.rewards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:11px}
+.reward-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:center;transition:all var(--t)}
+.reward-card.unlocked{border-color:var(--primary);box-shadow:var(--glow)}
+.reward-card.locked{opacity:.45}
+.reward-card.unlocked:hover{transform:translateY(-3px)}
+.reward-icon{font-size:2.2em;margin-bottom:8px}
+.reward-name{font-size:0.83em;font-weight:700}
+.reward-req{font-size:0.7em;color:var(--muted);margin-top:3px}
+
+/* ============================================================
+   خريطة الحرارة
+   ============================================================ */
+.heatmap-wrap{overflow-x:auto;padding-bottom:8px}
+.heatmap{display:flex;gap:3px}
+.hm-col{display:flex;flex-direction:column;gap:3px}
+.hm-cell{width:14px;height:14px;border-radius:3px;cursor:default;transition:transform .2s}
+.hm-cell:hover{transform:scale(1.4);z-index:10;position:relative}
+.hm-0{background:var(--border)}.hm-1{background:rgba(0,229,160,0.2)}.hm-2{background:rgba(0,229,160,0.45)}.hm-3{background:rgba(0,229,160,0.7)}.hm-4{background:var(--primary)}
+
+/* ============================================================
+   ✨ فلتر زمني للبيانات
+   TODO: إضافة مقارنة بين فترتين زمنيتين مستقبلاً
+   ============================================================ */
+.time-filter-bar{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.time-filter-bar span{font-size:0.8em;color:var(--muted);margin-left:4px}
+.tfilter-btn{padding:6px 14px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--muted);font-family:'Cairo',sans-serif;font-size:0.8em;font-weight:700;cursor:pointer;transition:all var(--t)}
+.tfilter-btn.active{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#0a0e1a;border-color:transparent}
+.tfilter-btn:hover:not(.active){border-color:var(--primary);color:var(--primary)}
+
+/* ============================================================
+   التقارير / Analytics
+   ============================================================ */
+.analytics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+.analytics-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+.analytics-title{font-size:0.8em;font-weight:700;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px}
+.analytics-val{font-size:1.7em;font-weight:900;font-family:'JetBrains Mono',monospace;color:var(--primary)}
+.analytics-sub{font-size:0.75em;color:var(--muted);margin-top:4px}
+.bhi{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.bhi-rank{font-size:0.73em;font-weight:700;color:var(--accent);min-width:18px;font-family:'JetBrains Mono',monospace}
+.bhi-name{flex:1;font-size:0.82em;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bhi-bar{height:4px;background:var(--border);border-radius:10px;overflow:hidden;flex:1}
+.bhi-bar-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--primary2));border-radius:10px}
+.bhi-pct{font-size:0.72em;color:var(--primary);font-family:'JetBrains Mono',monospace;min-width:34px;text-align:left}
+.week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.wdc{display:flex;flex-direction:column;align-items:center;gap:4px}
+.wdc-label{font-size:0.63em;color:var(--muted)}
+.wdc-bar{width:100%;height:60px;background:var(--border);border-radius:6px;overflow:hidden;display:flex;align-items:flex-end}
+.wdc-fill{width:100%;background:linear-gradient(to top,var(--primary),var(--primary2));border-radius:6px;transition:height .8s cubic-bezier(.4,0,.2,1)}
+.wdc-pct{font-size:0.62em;color:var(--primary);font-family:'JetBrains Mono',monospace}
+
+/* ✨ إحصاءات التركيز (Focus Stats) */
+.focus-stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.focus-stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;text-align:center}
+.focus-stat-val{font-size:1.5em;font-weight:900;font-family:'JetBrains Mono',monospace;color:var(--primary2)}
+.focus-stat-label{font-size:0.75em;color:var(--muted);margin-top:4px}
+
+/* ============================================================
+   التذكيرات
+   ============================================================ */
+.reminder-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;flex-wrap:wrap}
+.reminder-time{padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Cairo',sans-serif;font-size:0.88em;outline:none}
+.rtoggle{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0}
+.rtoggle input{opacity:0;width:0;height:0}
+.rslider{position:absolute;cursor:pointer;inset:0;background:var(--border);border-radius:24px;transition:.3s}
+.rslider:before{content:'';position:absolute;width:18px;height:18px;right:3px;bottom:3px;background:white;border-radius:50%;transition:.3s}
+.rtoggle input:checked+.rslider{background:var(--primary)}
+.rtoggle input:checked+.rslider:before{right:23px}
+
+/* ✨ توقيت مخصص لكل عادة */
+.habit-reminder-badge{font-size:0.65em;color:var(--primary2);display:inline-flex;align-items:center;gap:3px;margin-top:2px}
+
+/* ============================================================
+   ✨ أرشفة العادات
+   TODO: إضافة إمكانية استعادة العادة المؤرشفة إلى النشطة
+   ============================================================ */
+.archived-section{margin-top:20px;border-top:1px dashed var(--border);padding-top:16px}
+.archived-section-title{font-size:0.83em;font-weight:700;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.archived-row{background:rgba(100,116,139,0.06);border:1px dashed var(--border);border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:10px;margin-bottom:7px;opacity:.65}
+.archived-row:hover{opacity:1}
+.archived-name{flex:1;font-size:0.85em;font-weight:600}
+.archived-date{font-size:0.72em;color:var(--muted)}
+
+/* ============================================================
+   إشعارات (Toast)
+   ============================================================ */
+.notif-container{position:fixed;top:16px;left:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:300px}
+.notif{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:13px 16px;display:flex;align-items:flex-start;gap:11px;animation:sIn .3s cubic-bezier(.4,0,.2,1);box-shadow:0 8px 32px rgba(0,0,0,0.35)}
+.notif.success{border-color:rgba(0,229,160,0.4)}.notif.warning{border-color:rgba(245,158,11,0.4)}.notif.info{border-color:rgba(0,184,217,0.4)}
+@keyframes sIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
+.notif-icon{font-size:17px;flex-shrink:0;margin-top:1px}
+.notif-title{font-weight:700;font-size:0.88em;margin-bottom:1px}
+.notif-msg{font-size:0.78em;color:var(--muted)}
+
+/* ============================================================
+   المظهر الفاتح (Light Mode)
+   ============================================================ */
+body.light-mode{--bg:#f0f4f8;--surface:#ffffff;--card:#f8fafc;--border:#e2e8f0;--text:#1e293b;--muted:#94a3b8;--glow:0 0 20px rgba(0,180,120,0.12)}
+body.light-mode .bg-grid{background-image:linear-gradient(rgba(0,180,120,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,180,120,0.04) 1px,transparent 1px)}
+
+/* ============================================================
+   السحب والإفلات
+   ============================================================ */
+.drag-handle{cursor:grab;color:var(--muted);padding:0 5px;font-size:13px;opacity:.45;transition:opacity .2s}
+.drag-handle:hover{opacity:1;color:var(--primary)}
+tbody tr.sortable-ghost{opacity:.35}
+
+/* ============================================================
+   الشريط السفلي (Mobile) والزر العائم
+   ============================================================ */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);z-index:100;backdrop-filter:blur(10px);padding:6px 0 max(6px,env(safe-area-inset-bottom))}
+.bnav-items{display:flex;justify-content:space-around}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;cursor:pointer;color:var(--muted);background:none;border:none;font-family:'Cairo',sans-serif;transition:color var(--t)}
+.bnav-item.active{color:var(--primary)}
+.bnav-item i{font-size:17px}
+.bnav-label{font-size:0.58em;font-weight:700}
+.bnav-dot{width:4px;height:4px;border-radius:50%;background:var(--primary);margin:0 auto;opacity:0;transition:opacity .2s}
+.bnav-item.active .bnav-dot{opacity:1}
+.fab{display:none;position:fixed;bottom:76px;left:20px;z-index:101;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--primary2));border:none;color:#0a0e1a;font-size:22px;cursor:pointer;box-shadow:0 4px 24px rgba(0,229,160,0.4);transition:all var(--t)}
+.fab:active{transform:scale(.92)}
+
+/* ============================================================
+   Modal إضافة عادة
+   ============================================================ */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;backdrop-filter:blur(4px)}
+.modal-overlay.show{display:flex;align-items:flex-end;justify-content:center}
+@media(min-width:600px){.modal-overlay.show{align-items:center}}
+.modal-sheet{background:var(--surface);border:1px solid var(--border);border-radius:24px 24px 0 0;padding:24px;width:100%;max-width:500px;animation:sUp .3s cubic-bezier(.4,0,.2,1)}
+@media(min-width:600px){.modal-sheet{border-radius:24px;margin:16px}}
+@keyframes sUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-handle{width:40px;height:4px;background:var(--border);border-radius:4px;margin:0 auto 18px}
+.modal-close{float:left;background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px;line-height:1}
+
+/* ============================================================
+   شريط الهدف اليومي
+   ============================================================ */
+.goal-bar-wrap{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+
+/* ============================================================
+   فوتر
+   ============================================================ */
+.footer{text-align:center;padding:18px;color:var(--muted);font-size:0.82em;border-top:1px solid var(--border);margin-top:20px}
+.footer a{color:var(--primary);text-decoration:none}
+
+/* ============================================================
+   Scrollbar مخصص
+   ============================================================ */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media(max-width:900px){.stats-row{grid-template-columns:repeat(2,1fr)}.charts-row{grid-template-columns:1fr}.analytics-grid{grid-template-columns:repeat(2,1fr)}.focus-stats-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){
+  .app{padding:12px 12px 80px}
+  .stats-row{grid-template-columns:repeat(2,1fr);gap:10px}
+  .header-actions .date-display{display:none}
+  .charts-row{display:none}
+  .bottom-nav{display:block}
+  .fab{display:flex;align-items:center;justify-content:center}
+  .table-wrap{display:none}
+  .habit-cards{display:flex}
+  .analytics-grid{grid-template-columns:1fr 1fr}
+  .add-row{display:none}
+  .tabs{display:none}
+  .habits-section{padding:16px}
+  .analytics-two{grid-template-columns:1fr!important}
+  .focus-stats-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:400px){.analytics-grid{grid-template-columns:1fr}.focus-stats-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- خلفية ديكورية -->
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+<div class="bg-glow2"></div>
+
+<!-- حاوية الإشعارات -->
+<div class="notif-container" id="notifContainer"></div>
+
+<!-- ============================================================
+     ✨ وضع عدم الإزعاج - يظهر فوق كل شيء عند التفعيل
+     ============================================================ -->
+<button class="focus-exit-btn" onclick="exitFocusMode()">
+  <i class="fas fa-times"></i> خروج من وضع التركيز
+</button>
+<div class="focus-overlay" id="focusOverlay">
+  <div class="focus-label">🎯 وضع التركيز</div>
+  <div class="focus-task-label" id="focusTaskLabel">—</div>
+  <!-- التايمر مكرر داخل وضع التركيز -->
+  <div class="timer-ring" style="width:200px;height:200px">
+    <svg viewBox="0 0 130 130" width="200" height="200">
+      <defs><linearGradient id="tg2" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" style="stop-color:#00e5a0"/>
+        <stop offset="100%" style="stop-color:#00b8d9"/>
+      </linearGradient></defs>
+      <circle class="ring-bg" cx="65" cy="65" r="60"/>
+      <circle class="ring-fill" id="timerRing2" cx="65" cy="65" r="60" style="stroke:url(#tg2)"/>
+    </svg>
+    <div class="timer-text" id="timerText2" style="font-size:2.2em">25:00</div>
+  </div>
+  <div class="timer-controls">
+    <button class="btn btn-primary" onclick="startTimer()"><i class="fas fa-play"></i> بدء</button>
+    <button class="btn btn-ghost" onclick="pauseTimer()"><i class="fas fa-pause"></i> إيقاف</button>
+    <button class="btn btn-ghost" onclick="resetTimer()"><i class="fas fa-redo"></i> إعادة</button>
+  </div>
+</div>
+
+<!-- Modal إضافة عادة (موبايل) -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+    <div style="font-size:1.1em;font-weight:700;margin-bottom:16px">➕ عادة جديدة</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <input class="add-input" id="hiM" placeholder="اكتب العادة..." style="width:100%" onkeydown="if(event.key==='Enter')addHabitM()">
+      <input class="add-input" id="hnM" placeholder="ملاحظة (اختياري)..." style="width:100%">
+      <select class="cat-select" id="hcM" style="width:100%">
+        <option value="صحة">💚 صحة</option><option value="تعلم">💙 تعلم</option>
+        <option value="رياضة">🧡 رياضة</option><option value="دين">💜 دين</option>
+        <option value="عمل">❤️ عمل</option><option value="اجتماعي">💗 اجتماعي</option>
+      </select>
+      <!-- ✨ توقيت مخصص للعادة في الموبايل -->
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:0.85em;color:var(--muted);flex:1">⏰ تذكير مخصص:</label>
+        <input type="time" id="hrM" class="reminder-time" value="">
+        <label class="rtoggle"><input type="checkbox" id="hrOnM"><span class="rslider"></span></label>
+      </div>
+      <button class="btn btn-primary" onclick="addHabitM()" style="width:100%;justify-content:center;padding:14px">
+        <i class="fas fa-plus"></i> إضافة
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- ============================================================
+       الهيدر
+       ============================================================ -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div>
+        <div class="logo-text">HabitFlow</div>
+        <div class="logo-sub">متتبع العادات الذكي v6</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="date-display">
+        <span class="date-hijri" id="dH"></span>
+        <span class="date-gregorian" id="dG"></span>
+      </div>
+      <button class="btn btn-ghost btn-icon" onclick="exportData()" title="تصدير"><i class="fas fa-download"></i></button>
+      <button class="btn btn-ghost btn-icon" onclick="importData()" title="استيراد"><i class="fas fa-upload"></i></button>
+      <button class="btn btn-ghost btn-icon" id="themeBtn" onclick="toggleTheme()" title="المظهر"><i class="fas fa-moon"></i></button>
+      <button class="btn btn-ghost btn-icon" onclick="shareCard()" title="مشاركة"><i class="fas fa-share-alt"></i></button>
+      <button class="btn btn-danger btn-icon" onclick="resetAll()" title="إعادة ضبط"><i class="fas fa-trash-restore"></i></button>
+      <button class="btn btn-primary btn-sm" id="installBtn" style="display:none" onclick="installPWA()"><i class="fas fa-download"></i> تثبيت</button>
+    </div>
+  </div>
+
+  <!-- XP BAR -->
+  <div class="xp-bar-wrap" id="shareCard">
+    <div class="xp-avatar" onclick="document.getElementById('imgUp').click()">
+      <img id="userImg" src="https://api.dicebear.com/7.x/avataaars/svg?seed=habit" alt="avatar">
+      <input type="file" id="imgUp" style="display:none" accept="image/*" onchange="uploadImg(event)">
+    </div>
+    <div class="xp-info">
+      <input type="text" id="userName" value="" placeholder="اسمك هنا..." oninput="saveProfile()"
+        style="background:none;border:none;color:var(--text);font-family:'Cairo',sans-serif;font-size:1.05em;font-weight:700;outline:none;width:100%">
+      <div class="xp-level" id="xpLevel">مستوى 1 - مبتدئ</div>
+      <div class="xp-bar-bg"><div class="xp-bar-fill" id="xpBar" style="width:0%"></div></div>
+      <div class="xp-numbers" id="xpNumbers">0 / 100 XP</div>
+    </div>
+    <div>
+      <div style="font-size:0.78em;color:var(--muted);margin-bottom:6px">الإنجازات</div>
+      <div class="badge-row" id="badgeRow"></div>
+    </div>
+    <div style="text-align:center;flex-shrink:0">
+      <div style="font-size:1.9em;font-weight:900;font-family:'JetBrains Mono',monospace;color:var(--accent)" id="totalXP">0</div>
+      <div style="font-size:0.72em;color:var(--muted)">إجمالي XP</div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(0,229,160,0.1);color:var(--primary)"><i class="fas fa-list-check"></i></div><div class="stat-val" id="sH">0</div><div class="stat-label">إجمالي العادات</div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(245,158,11,0.1);color:var(--accent)"><i class="fas fa-fire"></i></div><div class="stat-val" id="sS">0</div><div class="stat-label">أطول سلسلة 🔥</div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(0,184,217,0.1);color:var(--primary2)"><i class="fas fa-chart-line"></i></div><div class="stat-val" id="sT">0%</div><div class="stat-label">إنجاز اليوم</div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(239,68,68,0.1);color:var(--danger)"><i class="fas fa-calendar-check"></i></div><div class="stat-val" id="sM">0%</div><div class="stat-label">إنجاز الشهر</div></div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="charts-row">
+    <div class="chart-card"><div class="chart-title"><i class="fas fa-chart-bar" style="color:var(--primary)"></i> الأداء الأسبوعي</div><div class="chart-wrap"><canvas id="weekChart"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title"><i class="fas fa-chart-pie" style="color:var(--primary2)"></i> توزيع العادات</div><div class="chart-wrap"><canvas id="catChart"></canvas></div></div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="habits-section">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('habits')"><i class="fas fa-list-check"></i> العادات</div>
+      <div class="tab" onclick="switchTab('analytics')"><i class="fas fa-chart-line"></i> التقارير</div>
+      <div class="tab" onclick="switchTab('heatmap')"><i class="fas fa-fire"></i> خريطة الحرارة</div>
+      <div class="tab" onclick="switchTab('rewards')"><i class="fas fa-trophy"></i> المكافآت</div>
+      <div class="tab" onclick="switchTab('timer')"><i class="fas fa-clock"></i> بومودورو</div>
+      <div class="tab" onclick="switchTab('reminders')"><i class="fas fa-bell"></i> التذكيرات</div>
+      <div class="tab" onclick="switchTab('archive')"><i class="fas fa-archive"></i> الأرشيف</div>
+    </div>
+
+    <!-- ======================================================
+         تبويب العادات
+         ====================================================== -->
+    <div class="tab-content active" id="tab-habits">
+      <div class="add-row">
+        <input class="add-input" id="habitInput" placeholder="اكتب عادة جديدة..." onkeydown="if(event.key==='Enter')addHabit()">
+        <input class="add-input" id="habitNote" placeholder="ملاحظة..." style="max-width:160px">
+        <select class="cat-select" id="catSelect">
+          <option value="صحة">💚 صحة</option><option value="تعلم">💙 تعلم</option>
+          <option value="رياضة">🧡 رياضة</option><option value="دين">💜 دين</option>
+          <option value="عمل">❤️ عمل</option><option value="اجتماعي">💗 اجتماعي</option>
+        </select>
+        <!-- ✨ توقيت مخصص لكل عادة -->
+        <input type="time" id="habitReminder" class="reminder-time" title="توقيت تذكير مخصص (اختياري)">
+        <label class="rtoggle" title="تفعيل التذكير المخصص"><input type="checkbox" id="habitReminderOn"><span class="rslider"></span></label>
+        <button class="btn btn-primary" onclick="addHabit()"><i class="fas fa-plus"></i> إضافة</button>
+      </div>
+      <div class="goal-bar-wrap">
+        <div style="display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:8px 13px">
+          <i class="fas fa-bullseye" style="color:var(--accent)"></i>
+          <span style="font-size:0.85em;color:var(--muted)">الهدف اليومي:</span>
+          <input type="number" id="dailyGoalInput" min="1" max="20" value="3" onchange="saveDailyGoal()"
+            style="width:46px;background:none;border:none;color:var(--text);font-family:'Cairo',sans-serif;font-size:0.92em;font-weight:700;outline:none;text-align:center">
+          <span style="font-size:0.8em;color:var(--muted)">عادة</span>
+        </div>
+        <div id="dailyGoalBar" style="flex:1;min-width:130px"></div>
+      </div>
+      <div class="table-wrap"><table><thead><tr id="tableHead"><th style="text-align:right;padding:9px 13px;min-width:170px">العادة</th></tr></thead><tbody id="tableBody"></tbody></table></div>
+      <div class="habit-cards" id="habitCards"></div>
+    </div>
+
+    <!-- ======================================================
+         ✨ تبويب التقارير مع فلتر زمني
+         TODO: إضافة تصدير التقارير كـ PDF مستقبلاً
+         ====================================================== -->
+    <div class="tab-content" id="tab-analytics">
+      <!-- فلتر زمني -->
+      <div class="time-filter-bar">
+        <span><i class="fas fa-filter"></i> عرض:</span>
+        <button class="tfilter-btn active" onclick="setTimeFilter('week',this)">أسبوع</button>
+        <button class="tfilter-btn" onclick="setTimeFilter('month',this)">شهر</button>
+        <button class="tfilter-btn" onclick="setTimeFilter('3months',this)">3 أشهر</button>
+        <button class="tfilter-btn" onclick="setTimeFilter('year',this)">سنة</button>
+      </div>
+      <div class="analytics-grid" id="analyticsGrid"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" class="analytics-two">
+        <div class="analytics-card">
+          <div class="analytics-title">🏆 أفضل العادات في الفترة</div>
+          <div id="bestHabitsList"></div>
+        </div>
+        <div class="analytics-card">
+          <div class="analytics-title">📅 أداء هذا الأسبوع</div>
+          <div class="week-grid" id="weekGrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- تبويب خريطة الحرارة -->
+    <div class="tab-content" id="tab-heatmap">
+      <div style="margin-bottom:14px;color:var(--muted);font-size:0.87em">خريطة إنجازاتك خلال آخر 16 أسبوع</div>
+      <div class="heatmap-wrap"><div class="heatmap" id="heatmapGrid"></div></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:0.78em;color:var(--muted)">
+        <span>أقل</span>
+        <div style="width:12px;height:12px;border-radius:3px;background:var(--border)"></div>
+        <div style="width:12px;height:12px;border-radius:3px;background:rgba(0,229,160,0.2)"></div>
+        <div style="width:12px;height:12px;border-radius:3px;background:rgba(0,229,160,0.45)"></div>
+        <div style="width:12px;height:12px;border-radius:3px;background:rgba(0,229,160,0.7)"></div>
+        <div style="width:12px;height:12px;border-radius:3px;background:var(--primary)"></div>
+        <span>أكثر</span>
+      </div>
+    </div>
+
+    <!-- تبويب المكافآت -->
+    <div class="tab-content" id="tab-rewards">
+      <div class="rewards-grid" id="rewardsGrid"></div>
+    </div>
+
+    <!-- ======================================================
+         ✨ تبويب بومودورو مع وضع عدم الإزعاج
+         ====================================================== -->
+    <div class="tab-content" id="tab-timer">
+      <div style="max-width:380px;margin:0 auto">
+
+        <!-- ✨ إحصاءات ساعات التركيز -->
+        <div class="focus-stats-grid" style="margin-bottom:20px">
+          <div class="focus-stat-card">
+            <div class="focus-stat-val" id="focusHoursWeek">0</div>
+            <div class="focus-stat-label">ساعات هذا الأسبوع</div>
+          </div>
+          <div class="focus-stat-card">
+            <div class="focus-stat-val" id="focusHoursMonth">0</div>
+            <div class="focus-stat-label">ساعات هذا الشهر</div>
+          </div>
+          <div class="focus-stat-card">
+            <div class="focus-stat-val" id="focusSessionsTotal">0</div>
+            <div class="focus-stat-label">جلسات مكتملة</div>
+          </div>
+        </div>
+
+        <div class="timer-ring">
+          <svg viewBox="0 0 130 130" width="150" height="150">
+            <defs><linearGradient id="tg" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" style="stop-color:#00e5a0"/>
+              <stop offset="100%" style="stop-color:#00b8d9"/>
+            </linearGradient></defs>
+            <circle class="ring-bg" cx="65" cy="65" r="60"/>
+            <circle class="ring-fill" id="timerRing" cx="65" cy="65" r="60"/>
+          </svg>
+          <div class="timer-text" id="timerText">25:00</div>
+        </div>
+
+        <div style="text-align:center;margin-bottom:14px">
+          <select id="timerMode" onchange="resetTimer()" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:10px;font-family:'Cairo',sans-serif;outline:none;cursor:pointer">
+            <option value="25">🎯 تركيز 25 دقيقة</option>
+            <option value="50">🔥 تركيز 50 دقيقة</option>
+            <option value="5">☕ استراحة 5 دقائق</option>
+            <option value="15">🌿 استراحة 15 دقيقة</option>
+          </select>
+        </div>
+
+        <!-- ✨ ربط جلسة التركيز بعادة معينة -->
+        <select class="focus-task-select" id="focusHabitSelect">
+          <option value="">— اختر العادة التي تعمل عليها (اختياري) —</option>
+        </select>
+
+        <div class="timer-controls">
+          <button class="btn btn-primary" onclick="startTimer()"><i class="fas fa-play"></i> بدء</button>
+          <button class="btn btn-ghost" onclick="pauseTimer()"><i class="fas fa-pause"></i> إيقاف</button>
+          <button class="btn btn-ghost" onclick="resetTimer()"><i class="fas fa-redo"></i> إعادة</button>
+          <!-- ✨ زر وضع عدم الإزعاج -->
+          <button class="btn btn-ghost" onclick="enterFocusMode()" title="وضع عدم الإزعاج" style="border-color:var(--primary2);color:var(--primary2)">
+            <i class="fas fa-expand-arrows-alt"></i> تركيز كامل
+          </button>
+        </div>
+
+        <div style="display:flex;gap:6px;justify-content:center;margin-top:16px" id="timerDots"></div>
+        <div id="pomodoroCount" style="text-align:center;margin-top:10px;color:var(--muted);font-size:0.83em"></div>
+      </div>
+    </div>
+
+    <!-- ======================================================
+         تبويب التذكيرات
+         ====================================================== -->
+    <div class="tab-content" id="tab-reminders">
+      <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:0.85em;color:var(--accent)">
+        ⚠️ التذكيرات تعمل فقط طالما الصفحة مفتوحة. لإشعارات حقيقية، فعّل إذن الإشعارات أدناه.
+      </div>
+      <!-- تذكير الصباح -->
+      <div class="reminder-row">
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:0.9em;margin-bottom:2px">🌅 تذكير الصباح</div>
+          <div style="font-size:0.8em;color:var(--muted)">ابدأ يومك بمراجعة عاداتك</div>
+        </div>
+        <input type="time" class="reminder-time" id="morningTime" value="08:00" onchange="saveReminders()">
+        <label class="rtoggle"><input type="checkbox" id="morningOn" onchange="saveReminders()"><span class="rslider"></span></label>
+      </div>
+      <!-- تذكير المساء -->
+      <div class="reminder-row">
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:0.9em;margin-bottom:2px">🌇 تذكير المساء</div>
+          <div style="font-size:0.8em;color:var(--muted)">راجع إنجازاتك قبل النوم</div>
+        </div>
+        <input type="time" class="reminder-time" id="eveningTime" value="21:00" onchange="saveReminders()">
+        <label class="rtoggle"><input type="checkbox" id="eveningOn" onchange="saveReminders()"><span class="rslider"></span></label>
+      </div>
+      <!-- إذن الإشعارات -->
+      <div class="reminder-row">
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:0.9em;margin-bottom:2px">🔔 إشعارات المتصفح</div>
+          <div style="font-size:0.8em;color:var(--muted)">اطلب إذن لإشعارات حقيقية</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="reqNotif()" id="notifPermBtn"><i class="fas fa-bell"></i> طلب الإذن</button>
+      </div>
+
+      <!-- ✨ قسم التوقيتات المخصصة لكل عادة -->
+      <div class="analytics-card" style="margin-top:16px">
+        <div class="analytics-title">⏰ توقيتات مخصصة للعادات</div>
+        <div id="habitRemindersList" style="font-size:0.85em;color:var(--muted)">
+          لا توجد توقيتات مخصصة بعد. أضف توقيتاً عند إنشاء العادة.
+        </div>
+      </div>
+
+      <div class="analytics-card" style="margin-top:12px">
+        <div class="analytics-title">📊 سجل اليوم</div>
+        <div id="todayLog" style="font-size:0.85em;color:var(--muted)">لا يوجد سجل بعد</div>
+      </div>
+    </div>
+
+    <!-- ======================================================
+         ✨ تبويب الأرشيف
+         يعرض العادات المؤرشفة مع بياناتها التاريخية
+         TODO: إضافة بحث واسترجاع من الأرشيف مستقبلاً
+         ====================================================== -->
+    <div class="tab-content" id="tab-archive">
+      <div style="background:rgba(100,116,139,0.08);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:0.85em;color:var(--muted)">
+        📦 العادات المؤرشفة لا تظهر في القائمة الرئيسية لكن بياناتها التاريخية محفوظة.
+      </div>
+      <div id="archiveList">
+        <div style="text-align:center;padding:40px;color:var(--muted)">
+          <div style="font-size:2.5em;margin-bottom:10px">📭</div>
+          <div>لا توجد عادات مؤرشفة</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end habits-section -->
+
+  <!-- فوتر -->
+  <div class="footer">
+    تم التطوير بكل حب بواسطة <strong><a href="https://github.com/AhmedAref00" target="_blank">Ahmed Aref</a></strong>
+    &nbsp;|&nbsp; HabitFlow v6
+    &nbsp;|&nbsp;
+    <a href="https://www.instagram.com/ahmedd_aref/" target="_blank"><i class="fab fa-instagram"></i></a>
+    &nbsp;
+    <a href="https://github.com/AhmedAref00" target="_blank"><i class="fab fa-github"></i></a>
+  </div>
+
+</div><!-- end app -->
+
+<!-- زر عائم (موبايل) -->
+<button class="fab" onclick="openModal()"><i class="fas fa-plus"></i></button>
+
+<!-- شريط التنقل السفلي (موبايل) -->
+<nav class="bottom-nav">
+  <div class="bnav-items">
+    <button class="bnav-item active" onclick="mTab('habits',this)"><i class="fas fa-list-check"></i><span class="bnav-label">العادات</span><div class="bnav-dot"></div></button>
+    <button class="bnav-item" onclick="mTab('analytics',this)"><i class="fas fa-chart-line"></i><span class="bnav-label">التقارير</span><div class="bnav-dot"></div></button>
+    <button class="bnav-item" onclick="mTab('heatmap',this)"><i class="fas fa-fire"></i><span class="bnav-label">الخريطة</span><div class="bnav-dot"></div></button>
+    <button class="bnav-item" onclick="mTab('rewards',this)"><i class="fas fa-trophy"></i><span class="bnav-label">المكافآت</span><div class="bnav-dot"></div></button>
+    <button class="bnav-item" onclick="mTab('timer',this)"><i class="fas fa-clock"></i><span class="bnav-label">تايمر</span><div class="bnav-dot"></div></button>
+    <button class="bnav-item" onclick="mTab('reminders',this)"><i class="fas fa-bell"></i><span class="bnav-label">تذكيرات</span><div class="bnav-dot"></div></button>
+  </div>
+</nav>
+
+<input type="file" id="importInput" style="display:none" accept=".json" onchange="handleImport(event)">
+
+<!-- ============================================================
+     JavaScript - HabitFlow v6
+     ============================================================ -->
+<script>
+/*
+ * ============================================================
+ * البيانات الأساسية
+ * habits: مصفوفة العادات النشطة
+ * archivedHabits: مصفوفة العادات المؤرشفة (✨ جديد)
+ * profile: بيانات المستخدم والـ XP
+ * focusSessions: سجل جلسات التركيز للإحصاءات (✨ جديد)
+ * currentTimeFilter: الفلتر الزمني الحالي (✨ جديد)
+ * ============================================================
+ */
+let habits        = JSON.parse(localStorage.getItem('hf_habits'))         || [];
+let archivedHabits= JSON.parse(localStorage.getItem('hf_archived'))       || []; // ✨ أرشيف العادات
+let profile       = JSON.parse(localStorage.getItem('hf_profile'))        || {name:'',xp:0,level:1,pomodoros:0};
+let focusSessions = JSON.parse(localStorage.getItem('hf_focus_sessions')) || []; // ✨ سجل جلسات التركيز
+
+// متغيرات التايمر
+let timerInterval = null, timerSeconds = 25*60, timerRunning = false, timerTotal = 25*60;
+let weekChart = null, catChart = null, reminderInterval = null;
+
+// ✨ الفلتر الزمني الافتراضي
+let currentTimeFilter = 'week';
+
+// ألوان الفئات
+const CC = {'صحة':'#00e5a0','تعلم':'#00b8d9','رياضة':'#f59e0b','دين':'#a78bfa','عمل':'#ef4444','اجتماعي':'#ec4899'};
+
+// مستويات XP
+const LEVELS = [
+  {min:0,   name:'مبتدئ',     color:'#64748b'},
+  {min:100, name:'متحمس',     color:'#00b8d9'},
+  {min:300, name:'ملتزم',     color:'#00e5a0'},
+  {min:600, name:'منضبط',     color:'#f59e0b'},
+  {min:1000,name:'محترف',     color:'#a78bfa'},
+  {min:2000,name:'أسطورة',    color:'#ef4444'}
+];
+
+// شارات الإنجاز
+const BADGES = [
+  {id:'first', icon:'🌱', name:'البداية',  check:()=>habits.length>=1},
+  {id:'week',  icon:'🔥', name:'أسبوع',    check:()=>getMaxStreak()>=7},
+  {id:'month', icon:'💪', name:'شهر',      check:()=>getMaxStreak()>=30},
+  {id:'five',  icon:'⭐', name:'5 عادات',  check:()=>habits.length>=5},
+  {id:'perfect',icon:'🏆',name:'يوم مثالي',check:()=>getTodayPct()>=100},
+  {id:'xp500', icon:'💎', name:'500 XP',   check:()=>profile.xp>=500},
+  // ✨ شارة جديدة لجلسات التركيز
+  {id:'focus10',icon:'🎯',name:'10 جلسات', check:()=>(profile.pomodoros||0)>=10}
+];
+
+// مكافآت
+const REWARDS = [
+  {icon:'🎯',name:'البداية الذكية',req:'أول عادة',   xpReq:0},
+  {icon:'🔥',name:'أسبوع نار',     req:'7 أيام',     xpReq:70},
+  {icon:'💪',name:'قوة الإرادة',   req:'100 XP',     xpReq:100},
+  {icon:'🌟',name:'نجم الشهر',     req:'30 يوم',     xpReq:300},
+  {icon:'👑',name:'ملك الانضباط', req:'500 XP',     xpReq:500},
+  {icon:'🏆',name:'الأسطورة',      req:'1000 XP',    xpReq:1000},
+  {icon:'💎',name:'ماسي',          req:'2000 XP',    xpReq:2000},
+  {icon:'🚀',name:'إلى النجوم',    req:'5000 XP',    xpReq:5000}
+];
+
+/* ============================================================
+   init - تهيئة التطبيق
+   ============================================================ */
+function init(){
+  updateDate();
+  buildTableHead();
+  loadProfile();
+  loadTheme();
+  loadDailyGoal();
+  loadReminders();
+  render();
+  initCharts();
+  buildHeatmap();
+  buildRewards();
+  buildAnalytics();
+  buildTimerDots();
+  buildArchiveList();
+  updateFocusStats();      // ✨ إحصاءات التركيز
+  updateHabitRemindersList(); // ✨ التوقيتات المخصصة
+  setInterval(updateDate, 60000);
+  checkDailyReminder();
+  startReminderChecker();
+  updateTodayLog();
+  updateFocusHabitSelect(); // ✨ قائمة العادات في التايمر
+}
+
+/* ============================================================
+   التاريخ
+   ============================================================ */
+function toHijri(d){
+  try{return new Intl.DateTimeFormat('ar-SA-u-ca-islamic',{day:'numeric',month:'long',year:'numeric'}).format(d);}
+  catch(e){return '';}
+}
+function updateDate(){
+  const n=new Date(),days=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  document.getElementById('dH').textContent=toHijri(n);
+  document.getElementById('dG').textContent=`${days[n.getDay()]} ${n.getDate()}/${n.getMonth()+1}/${n.getFullYear()}م`;
+}
+
+/* ============================================================
+   بناء رأس الجدول
+   ============================================================ */
+function buildTableHead(){
+  const tr=document.getElementById('tableHead');
+  const dim=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate(),tod=new Date().getDate();
+  for(let i=1;i<=dim;i++){
+    const th=document.createElement('th');th.textContent=i;
+    if(i===tod){th.style.color='var(--primary)';th.style.fontWeight='900';}
+    tr.appendChild(th);
+  }
+  const td=document.createElement('th');td.textContent='الإنجاز';tr.appendChild(td);
+  const ta=document.createElement('th');ta.textContent='';tr.appendChild(ta);
+}
+
+/* ============================================================
+   الملف الشخصي والـ XP
+   ============================================================ */
+function loadProfile(){
+  document.getElementById('userName').value=profile.name||'';
+  const img=localStorage.getItem('hf_img');
+  if(img)document.getElementById('userImg').src=img;
+  updateXP();
+}
+function saveProfile(){
+  profile.name=document.getElementById('userName').value;
+  localStorage.setItem('hf_profile',JSON.stringify(profile));
+}
+function uploadImg(e){
+  const r=new FileReader();
+  r.onload=ev=>{document.getElementById('userImg').src=ev.target.result;localStorage.setItem('hf_img',ev.target.result);};
+  r.readAsDataURL(e.target.files[0]);
+}
+
+function addXP(n){
+  profile.xp+=n;
+  localStorage.setItem('hf_profile',JSON.stringify(profile));
+  updateXP();
+  showNotif('XP+',`حصلت على ${n} نقطة خبرة! 🎉`,'success');
+}
+
+function updateXP(){
+  const xp=profile.xp;
+  document.getElementById('totalXP').textContent=xp;
+  let lvl=LEVELS[0],nxt=LEVELS[1];
+  for(let i=0;i<LEVELS.length;i++){if(xp>=LEVELS[i].min){lvl=LEVELS[i];nxt=LEVELS[i+1]||null;}}
+  const num=LEVELS.indexOf(lvl)+1;
+  document.getElementById('xpLevel').textContent=`مستوى ${num} - ${lvl.name}`;
+  document.getElementById('xpLevel').style.color=lvl.color;
+  if(nxt){const p=((xp-lvl.min)/(nxt.min-lvl.min))*100;document.getElementById('xpBar').style.width=p+'%';document.getElementById('xpNumbers').textContent=`${xp} / ${nxt.min} XP`;}
+  else{document.getElementById('xpBar').style.width='100%';document.getElementById('xpNumbers').textContent=`${xp} XP - الحد الأقصى!`;}
+  const br=document.getElementById('badgeRow');br.innerHTML='';
+  BADGES.forEach(b=>{
+    if(b.check()){
+      const el=document.createElement('span');el.className='badge';
+      el.style.cssText='background:rgba(0,229,160,0.1);color:var(--primary);border-color:rgba(0,229,160,0.3)';
+      el.textContent=b.icon+' '+b.name;br.appendChild(el);
+    }
+  });
+}
+
+/* ============================================================
+   إضافة عادة - مع دعم التوقيت المخصص
+   ✨ إضافة حقل reminderTime و reminderOn للعادة
+   ============================================================ */
+function addHabit(){
+  const inp=document.getElementById('habitInput');
+  const note=document.getElementById('habitNote');
+  const cat=document.getElementById('catSelect').value;
+  const name=inp.value.trim();
+  const reminderTime=document.getElementById('habitReminder').value;
+  const reminderOn=document.getElementById('habitReminderOn').checked;
+  if(!name){inp.focus();return;}
+  habits.push({
+    id: Date.now(),
+    name, cat,
+    note: note?note.value.trim():'',
+    history: {},
+    // ✨ بيانات التذكير المخصص
+    reminderTime: reminderTime || '',
+    reminderOn: reminderOn && !!reminderTime
+  });
+  inp.value='';
+  if(note)note.value='';
+  document.getElementById('habitReminder').value='';
+  document.getElementById('habitReminderOn').checked=false;
+  save();
+  addXP(10);
+  showNotif('عادة جديدة ✨',`تمت إضافة "${name}"!`,'success');
+  updateHabitRemindersList();
+  updateFocusHabitSelect();
+}
+
+function addHabitM(){
+  const inp=document.getElementById('hiM');
+  const note=document.getElementById('hnM');
+  const cat=document.getElementById('hcM').value;
+  const name=inp.value.trim();
+  const reminderTime=document.getElementById('hrM').value;
+  const reminderOn=document.getElementById('hrOnM').checked;
+  if(!name){inp.focus();return;}
+  habits.push({
+    id: Date.now(),
+    name, cat,
+    note: note?note.value.trim():'',
+    history: {},
+    reminderTime: reminderTime || '',
+    reminderOn: reminderOn && !!reminderTime
+  });
+  inp.value='';if(note)note.value='';
+  document.getElementById('hrM').value='';
+  document.getElementById('hrOnM').checked=false;
+  closeModal();save();addXP(10);
+  showNotif('عادة جديدة ✨',`تمت إضافة "${name}"!`,'success');
+  updateHabitRemindersList();
+  updateFocusHabitSelect();
+}
+
+/* ============================================================
+   تبديل يوم في العادة
+   ============================================================ */
+function toggleDay(idx,day){
+  const prev=habits[idx].history[day];
+  habits[idx].history[day]=!prev;
+  if(!prev){addXP(5);playSound();}
+  save();
+}
+
+/* ============================================================
+   ✨ أرشفة العادة بدلاً من الحذف
+   تحتفظ بالبيانات التاريخية وتنقل العادة للأرشيف
+   ============================================================ */
+function archiveHabit(idx){
+  const h=habits[idx];
+  if(!confirm(`أرشفة "${h.name}"؟\n\nستُحفظ جميع بياناتها التاريخية في الأرشيف.`))return;
+  archivedHabits.push({
+    ...h,
+    archivedAt: new Date().toISOString() // تاريخ الأرشفة
+  });
+  habits.splice(idx,1);
+  localStorage.setItem('hf_archived',JSON.stringify(archivedHabits));
+  save();
+  buildArchiveList();
+  showNotif('أرشفة 📦',`تم أرشفة "${h.name}" — البيانات محفوظة!`,'info');
+  updateFocusHabitSelect();
+}
+
+/*
+ * استعادة عادة من الأرشيف إلى القائمة النشطة
+ * TODO: في المستقبل يمكن إضافة خيار "إعادة تعيين بيانات الشهر الحالي"
+ */
+function restoreHabit(idx){
+  const h={...archivedHabits[idx]};
+  delete h.archivedAt;
+  habits.push(h);
+  archivedHabits.splice(idx,1);
+  localStorage.setItem('hf_archived',JSON.stringify(archivedHabits));
+  save();
+  buildArchiveList();
+  showNotif('استعادة ✅',`تمت استعادة "${h.name}" للقائمة النشطة!`,'success');
+  updateFocusHabitSelect();
+}
+
+/* حذف نهائي من الأرشيف */
+function deleteArchived(idx){
+  const h=archivedHabits[idx];
+  if(!confirm(`حذف نهائي لـ "${h.name}"؟\n\n⚠️ لا يمكن التراجع عن هذا!`))return;
+  archivedHabits.splice(idx,1);
+  localStorage.setItem('hf_archived',JSON.stringify(archivedHabits));
+  buildArchiveList();
+  showNotif('حذف','تم الحذف النهائي','warning');
+}
+
+/* بناء قائمة الأرشيف */
+function buildArchiveList(){
+  const el=document.getElementById('archiveList');
+  if(!el)return;
+  if(!archivedHabits.length){
+    el.innerHTML=`<div style="text-align:center;padding:40px;color:var(--muted)"><div style="font-size:2.5em;margin-bottom:10px">📭</div><div>لا توجد عادات مؤرشفة</div></div>`;
+    return;
+  }
+  el.innerHTML='';
+  archivedHabits.forEach((h,idx)=>{
+    const totalDone=Object.values(h.history).filter(Boolean).length;
+    const archivedDate=h.archivedAt?new Date(h.archivedAt).toLocaleDateString('ar'):'—';
+    const row=document.createElement('div');
+    row.className='archived-row';
+    row.innerHTML=`
+      <div style="flex:1">
+        <div class="archived-name">${h.name}</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:3px;flex-wrap:wrap">
+          <span class="habit-cat" style="background:${CC[h.cat]||'#00e5a0'}22;color:${CC[h.cat]||'#00e5a0'};font-size:0.7em;padding:2px 7px;border-radius:10px">${h.cat}</span>
+          <span class="archived-date">📅 ${totalDone} يوم مكتمل</span>
+          <span class="archived-date">🗃️ أُرشف: ${archivedDate}</span>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="restoreHabit(${idx})" title="استعادة"><i class="fas fa-undo"></i> استعادة</button>
+      <button class="btn btn-danger btn-icon" onclick="deleteArchived(${idx})" title="حذف نهائي"><i class="fas fa-trash"></i></button>
+    `;
+    el.appendChild(row);
+  });
+}
+
+/* حذف عادة نشطة (مع تأكيد مزدوج) */
+function deleteHabit(idx){
+  if(!confirm(`هل تريد أرشفة "${habits[idx].name}" أم حذفها نهائياً؟\n\nاضغط "إلغاء" للأرشفة\nاضغط "موافق" للحذف النهائي`)){
+    archiveHabit(idx); // أرشفة
+    return;
+  }
+  habits.splice(idx,1);
+  save();
+  showNotif('حذف','تم حذف العادة نهائياً','warning');
+  updateFocusHabitSelect();
+}
+
+/* ============================================================
+   حفظ وعرض
+   ============================================================ */
+function save(){
+  localStorage.setItem('hf_habits',JSON.stringify(habits));
+  render();updateCharts();buildHeatmap();buildRewards();buildAnalytics();updateTodayLog();
+}
+
+function render(){renderTable();renderCards();}
+
+function renderTable(){
+  const tbody=document.getElementById('tableBody');tbody.innerHTML='';
+  const tod=new Date().getDate(),dim=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate();
+  let totalDone=0,todayDone=0,maxStreak=0;
+  habits.forEach((h,idx)=>{
+    const streak=getStreak(h);if(streak>maxStreak)maxStreak=streak;let dc=0;
+    const tr=document.createElement('tr');
+    let html=`<td class="habit-cell"><div style="display:flex;align-items:center;gap:7px">
+      <span class="drag-handle"><i class="fas fa-grip-vertical"></i></span>
+      <div>
+        <div class="habit-name">${h.name}</div>
+        <span class="habit-cat" style="background:${CC[h.cat]||'#00e5a0'}22;color:${CC[h.cat]||'#00e5a0'}">${h.cat}</span>
+        ${streak>0?`<span class="streak-fire" style="margin-right:5px">🔥${streak}</span>`:''}
+        ${h.note?`<div class="habit-note" title="${h.note}">📝 ${h.note}</div>`:''}
+        ${h.reminderOn&&h.reminderTime?`<div class="habit-reminder-badge">⏰ ${h.reminderTime}</div>`:''}
+      </div>
+    </div></td>`;
+    for(let d=1;d<=dim;d++){
+      const chk=h.history[d]?'checked':'';
+      if(h.history[d]){dc++;totalDone++;if(d===tod)todayDone++;}
+      html+=`<td ${d===tod?'class="day-today"':''}><input type="checkbox" class="day-check" ${chk} onchange="toggleDay(${idx},${d})"></td>`;
+    }
+    const pct=Math.round(dc/dim*100);
+    html+=`<td><div style="font-weight:700;color:var(--primary)">${dc}</div><div style="font-size:0.68em;color:var(--muted)">${pct}%</div></td>`;
+    // ✨ زر أرشفة + حذف بدلاً من حذف مباشر
+    html+=`<td style="display:flex;gap:4px;align-items:center;padding:7px 5px">
+      <button class="btn btn-archive btn-icon" onclick="archiveHabit(${idx})" title="أرشفة"><i class="fas fa-archive"></i></button>
+      <button class="btn btn-danger btn-icon" onclick="deleteHabit(${idx})" title="حذف"><i class="fas fa-trash"></i></button>
+    </td>`;
+    tr.innerHTML=html;tbody.appendChild(tr);
+  });
+  document.getElementById('sH').textContent=habits.length;
+  document.getElementById('sS').textContent=maxStreak;
+  const tp=habits.length?Math.round(todayDone/habits.length*100):0;
+  const mp=habits.length?Math.round(totalDone/(habits.length*dim)*100):0;
+  document.getElementById('sT').textContent=tp+'%';
+  document.getElementById('sM').textContent=mp+'%';
+  updateXP();updateGoalBar(todayDone);initSortable();
+}
+
+function renderCards(){
+  const cont=document.getElementById('habitCards');if(!cont)return;cont.innerHTML='';
+  const tod=new Date().getDate(),dim=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate();
+  const start=Math.max(1,tod-6);
+  if(!habits.length){
+    cont.innerHTML=`<div style="text-align:center;padding:40px;color:var(--muted)"><div style="font-size:3em;margin-bottom:12px">🌱</div><div style="font-weight:700;margin-bottom:6px">لا توجد عادات بعد</div><div style="font-size:0.85em">اضغط + لإضافة عادتك الأولى</div></div>`;
+    return;
+  }
+  const dn=['أح','إث','ثل','أر','خم','جم','سب'];
+  habits.forEach((h,idx)=>{
+    const streak=getStreak(h);const dc=Object.values(h.history).filter(Boolean).length;const pct=Math.round(dc/dim*100);
+    const card=document.createElement('div');card.className='habit-card-mobile';
+    let dhtml='';
+    for(let d=start;d<=tod;d++){
+      const dt=new Date(new Date().getFullYear(),new Date().getMonth(),d);
+      dhtml+=`<div class="hcm-day ${d===tod?'hcm-today':''}">
+        <span class="hcm-day-label">${d===tod?'اليوم':dn[dt.getDay()]}</span>
+        <input type="checkbox" class="hcm-check" ${h.history[d]?'checked':''} onchange="toggleDay(${idx},${d})">
+      </div>`;
+    }
+    card.innerHTML=`
+      <div class="hcm-header">
+        <div>
+          <div class="hcm-name">${h.name}</div>
+          <div class="hcm-meta">
+            <span class="habit-cat" style="background:${CC[h.cat]||'#00e5a0'}22;color:${CC[h.cat]||'#00e5a0'};font-size:0.7em;padding:2px 7px;border-radius:10px">${h.cat}</span>
+            ${streak>0?`<span class="streak-fire">🔥${streak}</span>`:''}
+          </div>
+          ${h.note?`<div class="habit-note" style="margin-top:3px">📝 ${h.note}</div>`:''}
+          ${h.reminderOn&&h.reminderTime?`<div class="habit-reminder-badge">⏰ ${h.reminderTime}</div>`:''}
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-archive btn-icon" onclick="archiveHabit(${idx})" title="أرشفة"><i class="fas fa-archive"></i></button>
+          <button class="btn btn-danger btn-icon" onclick="deleteHabit(${idx})"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+      <div class="hcm-days">${dhtml}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="hcm-prog" style="flex:1"><div class="hcm-prog-fill" style="width:${pct}%"></div></div>
+        <span style="font-size:0.75em;color:var(--primary);font-family:'JetBrains Mono',monospace;min-width:36px">${pct}%</span>
+      </div>`;
+    cont.appendChild(card);
+  });
+}
+
+/* ============================================================
+   السحب والإفلات
+   ============================================================ */
+function initSortable(){
+  const tb=document.getElementById('tableBody');if(!tb||typeof Sortable==='undefined')return;
+  if(tb._s)tb._s.destroy();
+  tb._s=new Sortable(tb,{handle:'.drag-handle',animation:180,ghostClass:'sortable-ghost',
+    onEnd(e){const m=habits.splice(e.oldIndex,1)[0];habits.splice(e.newIndex,0,m);save();showNotif('ترتيب','تم حفظ الترتيب ✅','info');}
+  });
+}
+
+/* ============================================================
+   ✨ إحصاءات مع فلتر زمني
+   getDateRange: تُرجع عدد الأيام بناءً على الفلتر المحدد
+   ============================================================ */
+function setTimeFilter(filter, btn){
+  currentTimeFilter=filter;
+  document.querySelectorAll('.tfilter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  buildAnalytics();
+}
+
+/*
+ * حساب نطاق التاريخ بناءً على الفلتر
+ * يُرجع {days, label} - عدد الأيام والتسمية
+ * TODO: في المستقبل دعم تواريخ عبر أشهر متعددة بتخزين كـ ISO date
+ */
+function getFilterDays(){
+  switch(currentTimeFilter){
+    case 'week':    return {days:7,   label:'آخر 7 أيام'};
+    case 'month':   return {days:30,  label:'آخر 30 يوماً'};
+    case '3months': return {days:90,  label:'آخر 3 أشهر'};
+    case 'year':    return {days:365, label:'آخر سنة'};
+    default:        return {days:7,   label:'آخر 7 أيام'};
+  }
+}
+
+function buildAnalytics(){
+  const {days,label}=getFilterDays();
+  const tod=new Date().getDate();
+  const dim=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate();
+
+  // حساب الإنجازات في نطاق محدود بالأيام المتاحة في الشهر
+  const effectiveDays=Math.min(days,tod);
+  const startDay=Math.max(1,tod-effectiveDays+1);
+
+  let tc=0,pc=0;
+  habits.forEach(h=>{
+    for(let d=startDay;d<=tod;d++){
+      if(h.history[d])tc++;
+      pc++;
+    }
+  });
+  const mr=pc?Math.round(tc/pc*100):0;
+
+  // أداء الأيام الـ7 الماضية
+  const wk=[0,0,0,0,0,0,0];
+  for(let d=0;d<7;d++){
+    const dt=new Date();dt.setDate(new Date().getDate()-d);
+    wk[6-d]=habits.filter(h=>h.history[dt.getDate()]).length;
+  }
+  const wa=habits.length?Math.round(wk.reduce((a,b)=>a+b,0)/7/habits.length*100):0;
+
+  // أفضل يوم في الأسبوع خلال الفترة
+  const ds=[0,0,0,0,0,0,0],dc2=[0,0,0,0,0,0,0];
+  const yr=new Date().getFullYear(),mo=new Date().getMonth();
+  for(let d=startDay;d<=tod;d++){
+    const dow=new Date(yr,mo,d).getDay();
+    const dn=habits.filter(h=>h.history[d]).length;
+    ds[dow]+=dn;dc2[dow]++;
+  }
+  const da=ds.map((s,i)=>dc2[i]?Math.round(s/dc2[i]*100/Math.max(habits.length,1)):0);
+  const dnames=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const best=da.indexOf(Math.max(...da));
+
+  const ag=document.getElementById('analyticsGrid');
+  ag.innerHTML=`
+    <div class="analytics-card">
+      <div class="analytics-title">📈 معدل الإنجاز</div>
+      <div class="analytics-val">${mr}%</div>
+      <div class="analytics-sub">${label}: ${tc}/${pc} إنجاز</div>
+    </div>
+    <div class="analytics-card">
+      <div class="analytics-title">🌟 معدل الأسبوع</div>
+      <div class="analytics-val">${wa}%</div>
+      <div class="analytics-sub">متوسط آخر 7 أيام</div>
+    </div>
+    <div class="analytics-card">
+      <div class="analytics-title">📅 أفضل يوم</div>
+      <div class="analytics-val" style="font-size:1.15em">${habits.length?dnames[best]:'---'}</div>
+      <div class="analytics-sub">${habits.length?`معدل ${da[best]}%`:'أضف عادات أولاً'}</div>
+    </div>`;
+
+  // أفضل العادات في الفترة
+  const bl=document.getElementById('bestHabitsList');
+  if(bl){
+    const sorted=[...habits].sort((a,b)=>{
+      const sumA=Object.entries(a.history).filter(([d,v])=>v&&parseInt(d)>=startDay&&parseInt(d)<=tod).length;
+      const sumB=Object.entries(b.history).filter(([d,v])=>v&&parseInt(d)>=startDay&&parseInt(d)<=tod).length;
+      return sumB-sumA;
+    }).slice(0,5);
+    bl.innerHTML=sorted.length?sorted.map((h,i)=>{
+      const cnt=Object.entries(h.history).filter(([d,v])=>v&&parseInt(d)>=startDay&&parseInt(d)<=tod).length;
+      const p=effectiveDays?Math.round(cnt/effectiveDays*100):0;
+      return `<div class="bhi"><span class="bhi-rank">#${i+1}</span><span class="bhi-name" title="${h.name}">${h.name}</span><div class="bhi-bar"><div class="bhi-bar-fill" style="width:${p}%"></div></div><span class="bhi-pct">${p}%</span></div>`;
+    }).join(''):'<div style="color:var(--muted);font-size:0.85em">لا توجد عادات بعد</div>';
+  }
+
+  // أداء هذا الأسبوع (دائم)
+  const wg=document.getElementById('weekGrid');
+  if(wg){
+    const dn3=['أح','إث','ثل','أر','خم','جم','سب'];let wh='';
+    for(let d=6;d>=0;d--){
+      const dt=new Date();dt.setDate(new Date().getDate()-d);
+      const done2=habits.filter(h=>h.history[dt.getDate()]).length;
+      const p2=Math.round(done2/Math.max(habits.length,1)*100);const it=d===0;
+      wh+=`<div class="wdc"><span class="wdc-label" style="${it?'color:var(--primary);font-weight:700':''}">${dn3[dt.getDay()]}</span>
+        <div class="wdc-bar"><div class="wdc-fill" style="height:${p2}%;background:${it?'linear-gradient(to top,var(--primary),var(--primary2))':'linear-gradient(to top,rgba(0,229,160,0.45),rgba(0,184,217,0.45))'}"></div></div>
+        <span class="wdc-pct">${p2}%</span></div>`;
+    }
+    wg.innerHTML=wh;
+  }
+}
+
+/* ============================================================
+   الرسوم البيانية
+   ============================================================ */
+function initCharts(){
+  const wc=document.getElementById('weekChart').getContext('2d');
+  weekChart=new Chart(wc,{type:'bar',data:{labels:['أح','إث','ثل','أر','خم','جم','سب'],datasets:[{data:[0,0,0,0,0,0,0],backgroundColor:'rgba(0,229,160,0.18)',borderColor:'#00e5a0',borderWidth:2,borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#64748b',font:{size:10}}},y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#64748b'},max:Math.max(habits.length,1)}}}});
+  const cc=document.getElementById('catChart').getContext('2d');
+  catChart=new Chart(cc,{type:'doughnut',data:{labels:[],datasets:[{data:[],backgroundColor:[],borderWidth:0,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11},padding:12}}},cutout:'65%'}});
+  updateCharts();
+}
+
+function updateCharts(){
+  if(!weekChart||!catChart)return;
+  const t=new Date(),wd=[0,0,0,0,0,0,0];
+  for(let d=0;d<7;d++){const dt=new Date(t);dt.setDate(t.getDate()-d);wd[6-d]=habits.filter(h=>h.history[dt.getDate()]).length;}
+  weekChart.data.datasets[0].data=wd;weekChart.options.scales.y.max=Math.max(habits.length,1);weekChart.update();
+  const ca={};habits.forEach(h=>ca[h.cat]=(ca[h.cat]||0)+1);
+  catChart.data.labels=Object.keys(ca);catChart.data.datasets[0].data=Object.values(ca);catChart.data.datasets[0].backgroundColor=Object.keys(ca).map(c=>CC[c]||'#00e5a0');catChart.update();
+}
+
+/* ============================================================
+   خريطة الحرارة
+   ============================================================ */
+function buildHeatmap(){
+  const g=document.getElementById('heatmapGrid');g.innerHTML='';const t=new Date();
+  for(let w=15;w>=0;w--){
+    const col=document.createElement('div');col.className='hm-col';
+    for(let d=0;d<7;d++){
+      const dt=new Date(t);dt.setDate(t.getDate()-(w*7+d));
+      const day=dt.getDate();const done=habits.filter(h=>h.history[day]).length;const tot=habits.length;
+      let lvl=0;if(tot>0){const p=done/tot;if(p>0)lvl=1;if(p>0.25)lvl=2;if(p>0.5)lvl=3;if(p>=1)lvl=4;}
+      const cell=document.createElement('div');cell.className=`hm-cell hm-${lvl}`;
+      cell.title=`${dt.toLocaleDateString('ar')} - ${done}/${tot}`;
+      col.appendChild(cell);
+    }
+    g.appendChild(col);
+  }
+}
+
+/* ============================================================
+   المكافآت
+   ============================================================ */
+function buildRewards(){
+  const g=document.getElementById('rewardsGrid');g.innerHTML='';
+  REWARDS.forEach(r=>{
+    const u=profile.xp>=r.xpReq;
+    const c=document.createElement('div');c.className=`reward-card ${u?'unlocked':'locked'}`;
+    c.innerHTML=`<div class="reward-icon">${r.icon}</div><div class="reward-name">${r.name}</div><div class="reward-req">${r.req}</div>${u?'<div style="color:var(--primary);font-size:0.73em;margin-top:5px;font-weight:700">مفتوح ✓</div>':`<div style="color:var(--muted);font-size:0.73em;margin-top:5px">${r.xpReq} XP</div>`}`;
+    g.appendChild(c);
+  });
+}
+
+/* ============================================================
+   ✨ التايمر / بومودورو مع وضع عدم الإزعاج
+   ============================================================ */
+function buildTimerDots(){
+  const c=document.getElementById('timerDots');c.innerHTML='';
+  const done=(profile.pomodoros||0)%4;
+  for(let i=0;i<4;i++){const d=document.createElement('div');d.className='session-dot'+(i<done?' done':'');c.appendChild(d);}
+  document.getElementById('pomodoroCount').textContent=profile.pomodoros?`✅ جلسات مكتملة: ${profile.pomodoros}`:'';
+}
+
+/* قائمة العادات داخل التايمر */
+function updateFocusHabitSelect(){
+  const sel=document.getElementById('focusHabitSelect');if(!sel)return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">— اختر العادة التي تعمل عليها (اختياري) —</option>';
+  habits.forEach(h=>{
+    const opt=document.createElement('option');
+    opt.value=h.id;opt.textContent=`${h.name} (${h.cat})`;
+    sel.appendChild(opt);
+  });
+  sel.value=cur||'';
+}
+
+function startTimer(){
+  if(timerRunning)return;
+  timerRunning=true;
+  // تحديث الـ overlay إن كان مفعلاً
+  timerInterval=setInterval(()=>{
+    timerSeconds--;
+    updateTimerDisp();
+    if(timerSeconds<=0){
+      clearInterval(timerInterval);
+      timerRunning=false;
+      profile.pomodoros=(profile.pomodoros||0)+1;
+      localStorage.setItem('hf_profile',JSON.stringify(profile));
+
+      // ✨ حفظ جلسة التركيز بالتاريخ والمدة للإحصاءات
+      const mode=parseInt(document.getElementById('timerMode').value);
+      const linkedHabit=document.getElementById('focusHabitSelect').value;
+      focusSessions.push({
+        date: new Date().toISOString(),
+        minutes: mode,
+        habitId: linkedHabit || null
+      });
+      localStorage.setItem('hf_focus_sessions',JSON.stringify(focusSessions));
+      updateFocusStats();
+
+      addXP(25);
+      showNotif('🎯 انتهى الوقت!','جلسة تركيز مكتملة - +25 XP','success');
+      buildTimerDots();
+      playBeep();
+      if(Notification.permission==='granted')new Notification('HabitFlow',{body:'أحسنت! خذ استراحة.'});
+    }
+  },1000);
+}
+
+function pauseTimer(){clearInterval(timerInterval);timerRunning=false;}
+
+function resetTimer(){
+  clearInterval(timerInterval);timerRunning=false;
+  const m=parseInt(document.getElementById('timerMode').value);
+  timerSeconds=timerTotal=m*60;
+  updateTimerDisp();
+}
+
+function updateTimerDisp(){
+  const m=Math.floor(timerSeconds/60),s=timerSeconds%60;
+  const txt=`${m}:${s<10?'0'+s:s}`;
+  document.getElementById('timerText').textContent=txt;
+  // تحديث التايمر في وضع التركيز الكامل أيضاً
+  const t2=document.getElementById('timerText2');if(t2)t2.textContent=txt;
+  const C=2*Math.PI*60;
+  const off=C-(timerSeconds/timerTotal)*C;
+  document.getElementById('timerRing').style.strokeDashoffset=off;
+  const r2=document.getElementById('timerRing2');if(r2)r2.style.strokeDashoffset=off;
+}
+
+/* ============================================================
+   ✨ وضع عدم الإزعاج (Focus Mode)
+   ============================================================ */
+function enterFocusMode(){
+  document.body.classList.add('focus-mode');
+  const sel=document.getElementById('focusHabitSelect');
+  const habitName=sel&&sel.value?sel.options[sel.selectedIndex].text:'جلسة تركيز';
+  const lbl=document.getElementById('focusTaskLabel');
+  if(lbl)lbl.textContent=habitName;
+  document.getElementById('focusOverlay').style.display='flex';
+  showNotif('🎯 وضع التركيز','تم إخفاء كل شيء. اضغط "خروج" للعودة','info');
+}
+
+function exitFocusMode(){
+  document.body.classList.remove('focus-mode');
+  document.getElementById('focusOverlay').style.display='none';
+}
+
+/* ============================================================
+   ✨ إحصاءات ساعات التركيز
+   تحسب ساعات هذا الأسبوع والشهر من سجل جلسات التركيز
+   TODO: إضافة رسم بياني لتطور ساعات التركيز أسبوعياً مستقبلاً
+   ============================================================ */
+function updateFocusStats(){
+  const now=new Date();
+  const weekAgo=new Date(now);weekAgo.setDate(now.getDate()-7);
+  const monthAgo=new Date(now);monthAgo.setDate(now.getDate()-30);
+
+  let weekMin=0,monthMin=0;
+  focusSessions.forEach(s=>{
+    const d=new Date(s.date);
+    if(d>=weekAgo)weekMin+=s.minutes;
+    if(d>=monthAgo)monthMin+=s.minutes;
+  });
+
+  const wH=document.getElementById('focusHoursWeek');
+  const mH=document.getElementById('focusHoursMonth');
+  const tS=document.getElementById('focusSessionsTotal');
+
+  // عرض بالساعات والدقائق
+  if(wH)wH.textContent=weekMin>=60?`${(weekMin/60).toFixed(1)}س`:`${weekMin}د`;
+  if(mH)mH.textContent=monthMin>=60?`${(monthMin/60).toFixed(1)}س`:`${monthMin}د`;
+  if(tS)tS.textContent=focusSessions.length;
+}
+
+/* ============================================================
+   ✨ قائمة التوقيتات المخصصة للعادات
+   ============================================================ */
+function updateHabitRemindersList(){
+  const el=document.getElementById('habitRemindersList');if(!el)return;
+  const withReminders=habits.filter(h=>h.reminderOn&&h.reminderTime);
+  if(!withReminders.length){
+    el.innerHTML='<div style="color:var(--muted)">لا توجد توقيتات مخصصة بعد. أضف توقيتاً عند إنشاء العادة.</div>';
+    return;
+  }
+  el.innerHTML=withReminders.map(h=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="flex:1;font-weight:600">${h.name}</span>
+      <span class="habit-cat" style="background:${CC[h.cat]||'#00e5a0'}22;color:${CC[h.cat]||'#00e5a0'};font-size:0.7em;padding:2px 7px;border-radius:10px">${h.cat}</span>
+      <span style="color:var(--primary2);font-size:0.85em;font-weight:700">⏰ ${h.reminderTime}</span>
+    </div>`).join('');
+}
+
+/* ============================================================
+   فحص التذكيرات المخصصة للعادات
+   يُضاف لحلقة checkReminders
+   ============================================================ */
+function checkHabitReminders(ct,tod){
+  habits.forEach(h=>{
+    if(h.reminderOn&&h.reminderTime===ct&&!h.history[tod]){
+      showNotif(`⏰ تذكير: ${h.name}`,`حان وقت ممارسة عادة "${h.name}"!`,'info');
+      if(Notification.permission==='granted')
+        new Notification(`⏰ ${h.name}`,{body:`حان وقت ممارسة عادتك!`});
+    }
+  });
+}
+
+/* ============================================================
+   التذكيرات (صباح/مساء)
+   ============================================================ */
+function loadReminders(){
+  const s=JSON.parse(localStorage.getItem('hf_reminders')||'{}');
+  if(s.morningTime)document.getElementById('morningTime').value=s.morningTime;
+  if(s.eveningTime)document.getElementById('eveningTime').value=s.eveningTime;
+  if(s.morningOn)document.getElementById('morningOn').checked=true;
+  if(s.eveningOn)document.getElementById('eveningOn').checked=true;
+  updNotifBtn();
+}
+function saveReminders(){
+  localStorage.setItem('hf_reminders',JSON.stringify({
+    morningTime:document.getElementById('morningTime').value,
+    eveningTime:document.getElementById('eveningTime').value,
+    morningOn:document.getElementById('morningOn').checked,
+    eveningOn:document.getElementById('eveningOn').checked
+  }));
+  showNotif('التذكيرات','تم حفظ الإعدادات ✅','info');
+}
+function startReminderChecker(){
+  if(reminderInterval)clearInterval(reminderInterval);
+  reminderInterval=setInterval(checkReminders,60000);
+  checkReminders();
+}
+function checkReminders(){
+  const s=JSON.parse(localStorage.getItem('hf_reminders')||'{}');
+  const n=new Date();
+  const ct=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  const tod=n.getDate();
+  const done=habits.filter(h=>h.history[tod]).length;
+  if(s.morningOn&&s.morningTime===ct){showNotif('🌅 تذكير الصباح',`لديك ${habits.length-done} عادات متبقية اليوم`,'info');if(Notification.permission==='granted')new Notification('HabitFlow 🌅',{body:`صباح الخير! لديك ${habits.length-done} عادات اليوم`});}
+  if(s.eveningOn&&s.eveningTime===ct){const p=habits.length?Math.round(done/habits.length*100):0;showNotif('🌇 تذكير المساء',`إنجازك اليوم: ${p}% (${done}/${habits.length})`,'info');if(Notification.permission==='granted')new Notification('HabitFlow 🌇',{body:`مساء الخير! إنجازك اليوم: ${p}%`});}
+  // ✨ فحص التذكيرات المخصصة لكل عادة
+  checkHabitReminders(ct, tod);
+}
+function reqNotif(){
+  if(!('Notification'in window)){showNotif('⚠️','متصفحك لا يدعم الإشعارات','warning');return;}
+  Notification.requestPermission().then(p=>{updNotifBtn();if(p==='granted')showNotif('✅ الإشعارات','تم تفعيل إشعارات المتصفح!','success');else showNotif('❌','تم رفض الإشعارات','warning');});
+}
+function updNotifBtn(){
+  const b=document.getElementById('notifPermBtn');if(!b)return;
+  if(Notification.permission==='granted'){b.innerHTML='<i class="fas fa-check"></i> مفعّل';b.style.color='var(--primary)';b.style.borderColor='var(--primary)';}
+  else if(Notification.permission==='denied'){b.innerHTML='<i class="fas fa-times"></i> مرفوض';b.style.color='var(--danger)';b.style.borderColor='var(--danger)';}
+}
+
+/* ============================================================
+   سجل اليوم
+   ============================================================ */
+function updateTodayLog(){
+  const el=document.getElementById('todayLog');if(!el)return;
+  const tod=new Date().getDate();
+  if(!habits.length){el.textContent='لا توجد عادات بعد';return;}
+  const done=habits.filter(h=>h.history[tod]),notDone=habits.filter(h=>!h.history[tod]);
+  el.innerHTML=`<div style="margin-bottom:8px">✅ <strong>مكتمل (${done.length}):</strong> ${done.length?done.map(h=>`<span style="color:var(--primary);margin-right:4px">${h.name}</span>`).join(''):'<span style="color:var(--muted)">لا شيء</span>'}</div><div>⏳ <strong>متبقي (${notDone.length}):</strong> ${notDone.length?notDone.map(h=>`<span style="color:var(--accent);margin-right:4px">${h.name}</span>`).join(''):'<span style="color:var(--muted)">الكل مكتمل 🏆</span>'}</div>`;
+}
+
+/* ============================================================
+   إشعارات Toast
+   ============================================================ */
+function showNotif(t,m,tp='info'){
+  const ic={success:'✅',warning:'⚠️',info:'ℹ️'};
+  const c=document.getElementById('notifContainer');
+  const n=document.createElement('div');n.className=`notif ${tp}`;
+  n.innerHTML=`<div class="notif-icon">${ic[tp]||'ℹ️'}</div><div><div class="notif-title">${t}</div><div class="notif-msg">${m}</div></div>`;
+  c.appendChild(n);
+  setTimeout(()=>{n.style.opacity='0';n.style.transition='opacity .3s';setTimeout(()=>n.remove(),300);},3500);
+}
+
+/* ============================================================
+   التذكير اليومي التلقائي
+   ============================================================ */
+function checkDailyReminder(){
+  const tod=new Date().getDate(),last=localStorage.getItem('hf_lastcheck');
+  if(last!=tod){
+    localStorage.setItem('hf_lastcheck',tod);
+    if(habits.length>0){
+      const done=habits.filter(h=>h.history[tod]).length;
+      if(done<habits.length)setTimeout(()=>showNotif('تذكير 🔔',`لديك ${habits.length-done} عادات لم تكتمل اليوم!`,'warning'),1500);
+    }
+  }
+}
+
+/* ============================================================
+   التنقل بين التبويبات
+   ============================================================ */
+function switchTab(n){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  const ts=['habits','analytics','heatmap','rewards','timer','reminders','archive'];
+  const i=ts.indexOf(n);if(i>=0)document.querySelectorAll('.tab')[i].classList.add('active');
+  const tc=document.getElementById(`tab-${n}`);if(tc)tc.classList.add('active');
+  if(n==='heatmap')buildHeatmap();
+  if(n==='rewards')buildRewards();
+  if(n==='analytics')buildAnalytics();
+  if(n==='timer'){buildTimerDots();updateFocusStats();updateFocusHabitSelect();}
+  if(n==='archive')buildArchiveList();
+  if(n==='reminders')updateHabitRemindersList();
+}
+
+function mTab(n,el){
+  document.querySelectorAll('.bnav-item').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  const tc=document.getElementById(`tab-${n}`);if(tc)tc.classList.add('active');
+  if(n==='heatmap')buildHeatmap();
+  if(n==='rewards')buildRewards();
+  if(n==='analytics')buildAnalytics();
+  if(n==='timer'){buildTimerDots();updateFocusStats();updateFocusHabitSelect();}
+  if(n==='archive')buildArchiveList();
+  if(n==='reminders')updateHabitRemindersList();
+}
+
+/* ============================================================
+   Modal (موبايل)
+   ============================================================ */
+function openModal(){document.getElementById('addModal').classList.add('show');setTimeout(()=>document.getElementById('hiM').focus(),300);}
+function closeModal(){document.getElementById('addModal').classList.remove('show');}
+document.getElementById('addModal').addEventListener('click',e=>{if(e.target===document.getElementById('addModal'))closeModal();});
+
+/* ============================================================
+   الهدف اليومي
+   ============================================================ */
+function saveDailyGoal(){localStorage.setItem('hf_dailygoal',parseInt(document.getElementById('dailyGoalInput').value)||3);render();}
+function loadDailyGoal(){const s=localStorage.getItem('hf_dailygoal');const el=document.getElementById('dailyGoalInput');if(s&&el)el.value=s;}
+function updateGoalBar(done){
+  const ge=document.getElementById('dailyGoalInput'),be=document.getElementById('dailyGoalBar');if(!ge||!be)return;
+  const goal=parseInt(ge.value)||3,pct=Math.min(Math.round(done/goal*100),100);
+  const color=pct>=100?'var(--primary)':pct>=60?'var(--accent)':'var(--primary2)';const em=pct>=100?'🏆':pct>=60?'💪':'🎯';
+  be.innerHTML=`<div style="display:flex;align-items:center;gap:7px"><span style="font-size:0.8em;color:var(--muted)">${done}/${goal} ${em}</span><div style="flex:1;height:7px;background:var(--border);border-radius:10px;overflow:hidden;min-width:70px"><div style="height:100%;width:${pct}%;background:${color};border-radius:10px;transition:width .7s ease"></div></div><span style="font-size:0.78em;font-weight:700;color:${color}">${pct}%</span></div>`;
+}
+
+/* ============================================================
+   المظهر (Theme)
+   ============================================================ */
+function toggleTheme(){
+  const l=document.body.classList.toggle('light-mode');
+  localStorage.setItem('hf_theme',l?'light':'dark');
+  document.getElementById('themeBtn').querySelector('i').className=l?'fas fa-sun':'fas fa-moon';
+  showNotif('المظهر',l?'الوضع الفاتح ☀️':'الوضع الداكن 🌙','info');
+}
+function loadTheme(){
+  if(localStorage.getItem('hf_theme')==='light'){
+    document.body.classList.add('light-mode');
+    const b=document.getElementById('themeBtn');if(b)b.querySelector('i').className='fas fa-sun';
+  }
+}
+
+/* ============================================================
+   حسابات مساعدة
+   ============================================================ */
+function getStreak(h){const tod=new Date().getDate();let s=0;for(let i=tod;i>0;i--){if(h.history[i])s++;else if(i!==tod)break;}return s;}
+function getMaxStreak(){return habits.reduce((m,h)=>Math.max(m,getStreak(h)),0);}
+function getTodayPct(){if(!habits.length)return 0;const tod=new Date().getDate();return habits.filter(h=>h.history[tod]).length/habits.length*100;}
+
+/* ============================================================
+   تصدير / استيراد / مشاركة / إعادة ضبط
+   ============================================================ */
+function exportData(){
+  const b=new Blob([JSON.stringify({habits,archivedHabits,focusSessions,profile,exported:new Date().toISOString(),version:'6'},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);
+  a.download=`habitflow-v6-${new Date().toISOString().split('T')[0]}.json`;a.click();
+  showNotif('تصدير ✅','تم تصدير بياناتك!','success');
+}
+function importData(){document.getElementById('importInput').click();}
+function handleImport(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      if(d.habits&&Array.isArray(d.habits)){
+        if(!confirm(`استيراد ${d.habits.length} عادة؟ ستُدمج مع الحالية.`))return;
+        habits=[...habits,...d.habits];
+        if(d.archivedHabits)archivedHabits=[...archivedHabits,...d.archivedHabits]; // ✨ استيراد الأرشيف
+        if(d.focusSessions)focusSessions=[...focusSessions,...d.focusSessions]; // ✨ استيراد جلسات التركيز
+        if(d.profile&&d.profile.xp>profile.xp)profile=d.profile;
+        save();
+        localStorage.setItem('hf_archived',JSON.stringify(archivedHabits));
+        localStorage.setItem('hf_focus_sessions',JSON.stringify(focusSessions));
+        showNotif('استيراد ✅',`تم استيراد ${d.habits.length} عادة!`,'success');
+        buildArchiveList();updateFocusStats();
+      }else showNotif('خطأ','ملف غير صالح','warning');
+    }catch{showNotif('خطأ','تعذر قراءة الملف','warning');}
+  };
+  r.readAsText(f);e.target.value='';
+}
+function shareCard(){
+  html2canvas(document.getElementById('shareCard'),{backgroundColor:'#111827',scale:2}).then(c=>{
+    const a=document.createElement('a');a.download='HabitFlow-Progress.png';a.href=c.toDataURL();a.click();
+    showNotif('مشاركة 🎉','تم تحميل بطاقة الإنجاز!','success');
+  });
+}
+function resetAll(){
+  if(!confirm('⚠️ هل أنت متأكد؟\n\nسيتم حذف جميع البيانات!'))return;
+  ['hf_habits','hf_profile','hf_lastcheck','hf_theme','hf_dailygoal','hf_img','hf_reminders','hf_archived','hf_focus_sessions'].forEach(k=>localStorage.removeItem(k));
+  showNotif('إعادة الضبط','تم مسح كل شيء','warning');
+  setTimeout(()=>location.reload(),1200);
+}
+
+/* ============================================================
+   أصوات
+   ============================================================ */
+function playBeep(){
+  try{const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=880;g.gain.setValueAtTime(0.3,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+1.5);o.start();o.stop(a.currentTime+1.5);}catch(e){}
+}
+function playSound(){
+  try{const a=new AudioContext(),notes=[523,659,784];notes.forEach((f,i)=>{const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.type='sine';o.frequency.value=f;const t=a.currentTime+i*.15;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.18,t+.05);g.gain.exponentialRampToValueAtTime(0.001,t+.35);o.start(t);o.stop(t+.35);});}catch(e){}
+}
+
+/* ============================================================
+   تشغيل التطبيق
+   ============================================================ */
+// ============================================================
+// PWA - Service Worker تسجيل
+// ============================================================
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('[SW] Registered:', reg.scope))
+      .catch(err => console.log('[SW] Failed:', err));
+  });
+}
+
+// ============================================================
+// PWA - زر التثبيت
+// ============================================================
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const btn = document.getElementById('installBtn');
+  if(btn) btn.style.display = 'inline-flex';
+});
+window.addEventListener('appinstalled', () => {
+  const btn = document.getElementById('installBtn');
+  if(btn) btn.style.display = 'none';
+  showNotif('تم التثبيت 🎉','HabitFlow أُضيف لشاشتك الرئيسية!','success');
+});
+function installPWA(){
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
+}
+
+// ============================================================
+// PWA - كشف الأوفلاين
+// ============================================================
+window.addEventListener('offline', () => {
+  showNotif('أوفلاين 📴','لا يوجد إنترنت — التطبيق يعمل أوفلاين','warning');
+});
+window.addEventListener('online', () => {
+  showNotif('متصل 🌐','عاد الاتصال بالإنترنت','success');
+});
+
+init();
+</script>
+</body>
+</html>
